@@ -5,6 +5,7 @@ Software for Embedded Systems Course@IST
 Group 6 ASE - Campus Alameda
 
 João Fernandes, 87786, jcsf_1995@hotmail.com
+
 Jorge Heleno, 79042, jorge.heleno@ist.utl.pt
 
 Repository:
