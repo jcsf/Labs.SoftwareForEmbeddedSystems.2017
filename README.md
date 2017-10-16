@@ -1,4 +1,4 @@
-# Labs.SoftwareForEmbeddedSystems.2017
+# Software For Embedded Systems 2017
 Software for Embedded Systems Course@IST
 (2017/2018)
 
@@ -9,7 +9,7 @@ João Fernandes, 87786, jcsf_1995@hotmail.com
 Jorge Heleno, 79042, jorge.heleno@ist.utl.pt
 
 Repository:
-[ASE Labs](https://github.com/jcsf/Labs.SoftwareForEmbeddedSystems.2017)
+[Labs.SoftwareForEmbeddedSystems.2017](https://github.com/jcsf/Labs.SoftwareForEmbeddedSystems.2017)
 
 -------------------------------------------------------------------------------
 
