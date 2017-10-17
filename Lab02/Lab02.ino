@@ -9,7 +9,7 @@ const int angleSensor = A3;
 int tempRead = 0;
 int lightRead = 0;
 int angleRead = 0;
-int lastAngleRead = 0;
+int lastAngleRead = -1;
 
 int lightReadMinValue = 1023; //Start on max
 int lightReadMaxValue = 0; //Start on min
@@ -53,13 +53,11 @@ void setup() {
   digitalWrite(greenLedPin, LOW);
   digitalWrite(redLedPin, LOW);
   digitalWrite(yellowLedPin, LOW);
-
-  Serial.begin(9600);
 }
 
 void loop() {  
-  // Reaction Temperature
-
+  
+  // Temperature
   tempRead = analogRead(tempSensor); // Read Temperature
   temperature =  (((tempRead / 1024.0) * 5.0 ) - 0.5) * 100;
   
@@ -69,15 +67,13 @@ void loop() {
     digitalWrite(greenLedPin, LOW);
   }
 
-  // Reaction Light
+  // Light
   lightRead = analogRead(lightSensor); // Read Light 
   light = map(lightRead, lightReadMinValue, lightReadMaxValue, 255, 0); // Convert Analog Value
   light = constrain(light, 0, 255);
-  
-  Serial.println(light);
-  
+    
   // Noise Reduction
- if(light < 20) {
+  if(light < 20) {
     light = 0;
   } else if (light < 40) {
     light = 30;
@@ -112,8 +108,8 @@ void loop() {
   if (currentTime - previousTime >= intervalTime) {
     angleRead = analogRead(angleSensor); // Read Angle
     if (lastAngleRead != angleRead) {
-      angle = map(angleRead, 0, 1023, 0, 180); 
-      intervalTime = map(angle, 0, 180, 200, 2000);
+      angle = map(angleRead, 0, 1023, 0, 180); // Map Read Value to Angle
+      intervalTime = map(angle, 0, 180, 200, 2000); // Map Angle to Miliseconds
       lastAngleRead = angleRead;
     }
     isAngleOn = !isAngleOn;
