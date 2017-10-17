@@ -9,15 +9,18 @@ const int angleSensor = A3;
 int tempRead = 0;
 int lightRead = 0;
 int angleRead = 0;
+int lastAngleRead = 0;
 
 int lightReadMinValue = 1023; //Start on max
 int lightReadMaxValue = 0; //Start on min
 
 float temperature = 0;
 int light = 0;
+
 int angle = 0;
-int dTime = 0;
 boolean isAngleOn = false;
+int intervalTime = 0;
+unsigned long previousTime = 0, currentTime = 0;
 
 void setup() {
   pinMode(greenLedPin, OUTPUT);
@@ -32,7 +35,7 @@ void setup() {
   digitalWrite(yellowLedPin, HIGH);
   
   // Calibration During the First Five Seconds
-  while (millis() < 5000) {
+  while (millis() < 3000) {
     lightRead = analogRead(lightSensor);
     
     // Record the Maximum Value Read
@@ -50,39 +53,75 @@ void setup() {
   digitalWrite(greenLedPin, LOW);
   digitalWrite(redLedPin, LOW);
   digitalWrite(yellowLedPin, LOW);
+
+  Serial.begin(9600);
 }
 
-void loop() {
-  // Analog Read's
-  tempRead = analogRead(tempSensor); // Read Temperature
-  lightRead = analogRead(lightSensor); // Read Light
-  angleRead = analogRead(angleSensor); // Read Angle
-
-  // Convert Analog Values
-  temperature =  (((tempRead / 1024.0) * 5.0 ) - 0.5) * 100;
-  light = map(lightRead, lightReadMinValue, lightReadMaxValue, 255, 0);
-  angle = map(angleRead, 0, 1023, 0, 180); 
-  
+void loop() {  
   // Reaction Temperature
-  if(temperature > 26) {
+
+  tempRead = analogRead(tempSensor); // Read Temperature
+  temperature =  (((tempRead / 1024.0) * 5.0 ) - 0.5) * 100;
+  
+  if(temperature > 30) {
     digitalWrite(greenLedPin, HIGH);
   } else {
     digitalWrite(greenLedPin, LOW);
   }
 
   // Reaction Light
+  lightRead = analogRead(lightSensor); // Read Light 
+  light = map(lightRead, lightReadMinValue, lightReadMaxValue, 255, 0); // Convert Analog Value
   light = constrain(light, 0, 255);
-  digitalWrite(redLedPin, light);
-
-  // Reaction Angle (Potentiometer)
-  dTime = map(angle, 0, 180, 200, 2000);
-  isAngleOn = !isAngleOn;
   
-  if(isAngleOn) {
-    digitalWrite(yellowLedPin, HIGH);
+  Serial.println(light);
+  
+  // Noise Reduction
+ if(light < 20) {
+    light = 0;
+  } else if (light < 40) {
+    light = 30;
+  } else if (light < 60) {
+    light = 50;
+  } else if (light < 80) {
+    light = 70;
+  } else if (light < 100) {
+    light = 90;
+  } else if (light < 120) {
+    light = 110;
+  } else if (light < 140) {
+    light = 130;
+  } else if (light < 160) {
+    light = 150;
+  } else if (light < 180) {
+    light = 170;
+  } else if (light < 200) {
+    light = 190;
+  } else if (light < 220) {
+    light = 210;
+  } else if (light < 240) {
+    light = 230;
   } else {
-    digitalWrite(yellowLedPin, LOW);
+    light = 255;
   }
+  analogWrite(redLedPin, light);
 
-  delay(dTime); // Wait 0.2 - 2 Seconds
+  // Potentiometer
+  currentTime = millis();
+  
+  if (currentTime - previousTime >= intervalTime) {
+    angleRead = analogRead(angleSensor); // Read Angle
+    if (lastAngleRead != angleRead) {
+      angle = map(angleRead, 0, 1023, 0, 180); 
+      intervalTime = map(angle, 0, 180, 200, 2000);
+      lastAngleRead = angleRead;
+    }
+    isAngleOn = !isAngleOn;
+    if(isAngleOn) {
+      digitalWrite(yellowLedPin, HIGH);
+    } else {
+      digitalWrite(yellowLedPin, LOW);
+    }
+    previousTime = currentTime;
+  }
 }
