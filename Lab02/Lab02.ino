@@ -103,15 +103,16 @@ void loop() {
   analogWrite(redLedPin, light);
 
   // Potentiometer
+  angleRead = analogRead(angleSensor); // Read Angle
+  if (lastAngleRead != angleRead) {
+    angle = map(angleRead, 0, 1023, 0, 180); // Map Read Value to Angle
+    intervalTime = map(angle, 0, 180, 200, 2000); // Map Angle to Miliseconds
+    lastAngleRead = angleRead;
+  }
+
   currentTime = millis();
   
   if (currentTime - previousTime >= intervalTime) {
-    angleRead = analogRead(angleSensor); // Read Angle
-    if (lastAngleRead != angleRead) {
-      angle = map(angleRead, 0, 1023, 0, 180); // Map Read Value to Angle
-      intervalTime = map(angle, 0, 180, 200, 2000); // Map Angle to Miliseconds
-      lastAngleRead = angleRead;
-    }
     isAngleOn = !isAngleOn;
     if(isAngleOn) {
       digitalWrite(yellowLedPin, HIGH);
