@@ -17,6 +17,8 @@ Repository:
 
 All labs contain the Lab Guide, the Lab Report and the Arduino Code.
 
-* Lab 1: [Building An Embedded System](Lab01). 
+* Lab 1: [Building An Embedded System](Lab01)
 
-* Lab 2: [Sensing the Real World](Lab02).
+* Lab 2: [Sensing the Real World](Lab02)
+
+* Lab 3: [Wired Communications Between Embedded Systems](Lab03)
