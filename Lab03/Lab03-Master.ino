@@ -22,7 +22,6 @@ void setup() {
 
   // Start Wire Connection
   Wire.begin();
-  
   // Calibrate Light Sensor
   
   // Calibration During the First Three Seconds

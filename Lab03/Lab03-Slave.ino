@@ -18,13 +18,13 @@ void setup() {
   
   Wire.begin(8);
   Wire.onReceive(receiveEvent);
-
+  
   while(millis() < 3000);
 }
 
 void loop() {  
   
-  if(temperature > 30) {
+  if(temperature > 27) {
     digitalWrite(greenLedPin, HIGH);
   } else {
     digitalWrite(greenLedPin, LOW);
