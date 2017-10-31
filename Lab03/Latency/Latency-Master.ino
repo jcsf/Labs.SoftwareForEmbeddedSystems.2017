@@ -14,13 +14,13 @@ void loop() {
   Wire.write("A");
   Wire.endTransmission();
   
-  long sendTime = millis();
+  long sendTime = micros();
   
   while(digitalRead(receivePin) != HIGH);
 
-  long latency = millis() - sendTime;
+  long latency = micros() - sendTime;
 
   Serial.println(latency);
 
-  while(true);
+  delay(5000);
 }
