@@ -8,13 +8,25 @@
 #define ACK 4
 #define STATUS 5
 
+// SEMAPHORES
+#define YELLOW_TRANSITION_TIME 500
+#define YELLOW_BLINKING_PERIOD 1000
+#define WATCHDOG_TIMER 300
+
+// CONTROLLER
+#define WIRE_MODE false
+#define MAX_ENTRY 4
+#define PING_PERIOD 100
+#define ERRORS_PERIOD 200
+
+
 // SEMAPHORE A
 const int A_redLedPin = 11;
-const int A_yellowLedPin = 12;
-const int A_greenLedPin = 13;
+const int A_yellowLedPin = 10;
+const int A_greenLedPin = 9;
 const int A_redStatusPin = A1;
-const int A_pedestriansLedPin = 9;
-const int A_pedestriansButtonPin = 8;
+const int A_pedestriansLedPin = 8;
+const int A_pedestriansButtonPin = 7;
 
 boolean A_redLight = false;
 boolean A_yellowLight = false;
@@ -24,17 +36,17 @@ boolean A_pedestriansLight = false;
 boolean A_pedestriansButtonPressed = false;
 
 int A_status = 0; //0 - OFF | 1 - OPEN | 2 - CLOSE
-const long A_blinkingPeriod = 1000;
-const long A_transitionTime = 500;
 boolean A_error = false;
 
 long A_lastTime = 0;
+long A_watchdogTimer = 0;
+boolean A_watchdog = true;
 // -------------------------------
 
 // SEMAPHORE B
-const int B_redLedPin = 5;
-const int B_yellowLedPin = 6;
-const int B_greenLedPin = 7;
+const int B_redLedPin = 6;
+const int B_yellowLedPin = 5;
+const int B_greenLedPin = 4;
 const int B_redStatusPin = A2;
 
 boolean B_redLight = false;
@@ -42,57 +54,61 @@ boolean B_yellowLight = false;
 boolean B_greenLight = false;
 
 int B_status = 0; //0 - OFF | 1 - OPEN | 2 - CLOSE
-const long B_blinkingPeriod = 1000;
-const long B_transitionTime = 500;
 boolean B_error = false;
 
 long B_lastTime = 0;
+long B_watchdogTimer = 0;
+boolean B_watchdog = true;
+// -------------------------------
+
+// ENTRY CONTROLLER
+const int entryLSPin = 2;
+const int entryHSPin = 3;
+
+int entryNumber;
+bool isController = false;
+
+uint8_t messageReceive[4] = {0, 0, 0, 0};
+uint8_t messageSent[5] = {0, 0, 0, 0, 0};
+int mSLength = 0;
 // -------------------------------
 
 // CONTROLLER
 const int potentiometerPin = A0;
-const int controllerButtonPin = 2;
-const int controllerLedPin = 3;
+const int controllerButtonPin = 13;
+const int controllerLedPin = 12;
 
-int maxEntry = 4;
-char messageController[6] = "00000"; 
+int entryOpen = 1;
 
 bool controllerOn = false;
 bool sentOff = true;
 bool reduceTime = false;
 
+uint8_t messageController[5] = {0, 0, 0, 0, 0}; 
+
 int persistentErrors = 0;
-bool entryErrors[4] = {false, false, false, false};
+bool entryErrors[5] = {false, false, false, false, false};
 
-bool aloneMode = true;
-
+long controller_period = 2000;
 long controller_lastTimePeriod = 0;
 long controller_lastTimePing = 0;
 long controller_lastTimeBlink = 0;
-long controller_period = 2000;
-long controller_periodPing = 1000;
-
+long controller_lastTimeErrors = 0;
 // -------------------------------
-
-const int entryLSPin = 4;
-const int entryHSPin = 10;
-
-int entryNumber;
-int entryOpen = 1;
-bool isController = false;
-
-char messageSent[6] = "00000";
-char messageReceive[5] = "0000"; 
 
 void setup() {
   Serial.begin(9600);
   
   entryNumber = getEntryNumber();
+
+  Serial.println("ENTRY:");
+  Serial.println(entryNumber);
+  Serial.println("------");
   
   if(entryNumber == 1) {
     isController = true;
   }
-
+  
   pinMode(A_redLedPin, OUTPUT);
   pinMode(A_yellowLedPin, OUTPUT);
   pinMode(A_greenLedPin, OUTPUT);
@@ -112,13 +128,13 @@ void setup() {
   pinMode(entryLSPin, INPUT);
   pinMode(entryHSPin, INPUT);
   
-  /*Wire.begin(entryNumber);
+  Wire.begin(entryNumber);
   Wire.onReceive(receiveEvent);
-  Wire.onRequest(requestEvent);*/
+  Wire.onRequest(requestEvent);
 }
 
 void loop() {
-  if(isController || aloneMode) {
+  if(isController) {
     controller();
   }
 
@@ -131,16 +147,17 @@ void loop() {
 
 void semaphoreA() {
   long currentTime = millis();
+
   if(A_status == 0 || A_error) {
-    if(currentTime - A_lastTime >= A_blinkingPeriod) {
+    if(currentTime - A_lastTime >= YELLOW_BLINKING_PERIOD) {
       A_yellowLight = !A_yellowLight;
       A_lastTime = currentTime;
     }
     A_redLight = false;
     A_greenLight = false;
     A_pedestriansLight = false;
-  } else {
-    if(currentTime - A_lastTime < A_transitionTime) {
+  } else { 
+    if(currentTime - A_lastTime < YELLOW_TRANSITION_TIME) {
       A_redLight = false;
       A_yellowLight = true;
       A_greenLight = false; 
@@ -153,7 +170,6 @@ void semaphoreA() {
         A_pedestriansLight = false;
         if(digitalRead(A_pedestriansButtonPin) == HIGH) {
           A_pedestriansButtonPressed = true;
-          delay(500);
         }
       } else if (A_status == 2) {
         A_redLight = true;
@@ -190,8 +206,19 @@ void semaphoreA() {
       if(analogRead(A_redStatusPin) > 450) {
         A_error = false;
       } else {
+        digitalWrite(A_redLedPin, LOW);
         A_error = true;
       }
+  }
+
+  if(A_status > 0 && currentTime >= A_watchdogTimer + WATCHDOG_TIMER) {
+    if(!A_watchdog) {
+      Serial.println("IN WATCHDOG A");
+      setSemaphoreAOff();
+    } else {
+      A_watchdog = false;
+    }
+    A_watchdogTimer = currentTime;
   }
 }
 
@@ -201,6 +228,8 @@ void setSemaphoreAOff() {
     A_lastTime = millis();
     A_yellowLight = true;
     A_error = false;
+    A_watchdogTimer = millis();
+    A_watchdog = true;
   }
 }
 
@@ -227,14 +256,14 @@ boolean isSemaphoreAError() {
 void semaphoreB() {
  long currentTime = millis();
   if(B_status == 0 || B_error) {
-    if(currentTime - B_lastTime >= B_blinkingPeriod) {
+    if(currentTime - B_lastTime >= YELLOW_BLINKING_PERIOD) {
       B_yellowLight = !B_yellowLight;
       B_lastTime = currentTime;
     }
     B_redLight = false;
     B_greenLight = false;
   } else {
-    if(currentTime - B_lastTime < B_transitionTime) {
+    if(currentTime - B_lastTime < YELLOW_TRANSITION_TIME) {
       B_redLight = false;
       B_yellowLight = true;
       B_greenLight = false;
@@ -272,8 +301,19 @@ void semaphoreB() {
       if(analogRead(B_redStatusPin) > 450) {
         B_error = false;
       } else {
+        digitalWrite(B_redLedPin, LOW);
         B_error = true;
       }
+  }
+
+  if(B_status > 0 && currentTime >= B_watchdogTimer + WATCHDOG_TIMER) {
+    if(!B_watchdog) {
+      Serial.println("IN WATCHDOG B");
+      setSemaphoreBOff();
+    } else {
+      B_watchdog = false;
+    }
+    B_watchdogTimer = currentTime;
   }
 }
 
@@ -283,6 +323,8 @@ void setSemaphoreBOff() {
     B_lastTime = millis();
     B_yellowLight = true;
     B_error = false;
+    B_watchdog = true;
+    B_watchdogTimer = millis();
   }
 }
 
@@ -319,47 +361,58 @@ int getEntryNumber() {
   return entry + 1;
 }
 
-void receiveMessage(char* message) {
-  char testIntegrity = 0;
-
+void receiveMessage(uint8_t* message) {
+  uint8_t testIntegrity = 0;
+  
   for(int i = 0; i < 3; i++) {
     testIntegrity = testIntegrity + message[i];
   }
-    
+
+  A_watchdog = true;
+  B_watchdog = true;
+  
   if(testIntegrity == message[3]) {
-    if(message[1] - '0' == RED) {
+    if(message[1] == RED) {
+      Serial.println("RED MESSAGE RECEIVED");
       setSemaphoreAClose();
       setSemaphoreBOpen();
-      requestEvent(generateMessage(entryNumber, ACK, 0));
-    } else if (message[1] - '0' == GREEN) {
+      generateMessage(entryNumber, ACK, 0);
+    } else if (message[1] == GREEN) {
+      Serial.println("GREEN MESSAGE RECEIVED");
       setSemaphoreBClose();
       setSemaphoreAOpen();
-      requestEvent(generateMessage(entryNumber, ACK, 0));
-    } else if (message[1] - '0' == OFF) {
+      generateMessage(entryNumber, ACK, 0);
+    } else if (message[1] == OFF) {
+      Serial.println("OFF MESSAGE RECEIVED");
       setSemaphoreAOff();
       setSemaphoreBOff();
-      requestEvent(generateMessage(entryNumber, ACK, 0));
-    } else if (message[1] - '0' == PING) {
-      requestEvent(generateStatusMessage(entryNumber, STATUS, 0, isSemaphoreAError(), isSemaphoreBError(), A_pedestriansButtonPressed));
+      generateMessage(entryNumber, ACK, 0);
+    } else if (message[1] == PING) {
+      Serial.println("PING MESSAGE RECEIVED");
+      generateStatusMessage(entryNumber, STATUS, 0, isSemaphoreAError(), isSemaphoreBError(), A_pedestriansButtonPressed);
       A_pedestriansButtonPressed = false;
     }
-  }  
+  }
+
+  if(entryNumber == 1) {
+    receiveMessageController(messageSent, mSLength);
+  }
+
+  A_watchdog = true;
+  B_watchdog = true;
 }
 
-char* generateMessage(int sender, int messageType, int destination) {
-  char message[5] = "0000";
-  sprintf(message, "%d%d%d", sender, messageType, destination);
-  
-  char integrity = message[0] + message[1] + message[2];
-  
-  sprintf(messageSent, "%d%d%d%c", sender, messageType, destination, integrity);
-  
-  return messageSent;
+void generateMessage(uint8_t sender, uint8_t messageType, uint8_t destination) {
+  messageSent[0] = sender;
+  messageSent[1] = messageType;
+  messageSent[2] = destination;
+  messageSent[3] = sender + messageType + destination;
+
+  mSLength = 4;
 }
 
-char* generateStatusMessage(int sender, char messageType, int destination, boolean errorSemaphoreA, boolean errorSemaphoreB, boolean buttonPressed) {
-  char message[6] = "00000";
-  char statusMessage = 0x00;
+void generateStatusMessage(int sender, char messageType, int destination, boolean errorSemaphoreA, boolean errorSemaphoreB, boolean buttonPressed) {
+  uint8_t statusMessage = 0x00;
   
   if(errorSemaphoreA) {
     statusMessage = statusMessage | 0xE0;
@@ -373,45 +426,42 @@ char* generateStatusMessage(int sender, char messageType, int destination, boole
     statusMessage = statusMessage | 0x02;
   }
 
-  sprintf(message, "%d%d%d%c", sender, messageType, destination, statusMessage);
+  messageSent[0] = sender;
+  messageSent[1] = messageType;
+  messageSent[2] = destination;
+  messageSent[3] = statusMessage;
+  messageSent[4] = sender + messageType + destination + statusMessage;
 
-  char integrity = message[0] + message[1] + message[2] + message[3];
-
-  sprintf(messageSent, "%d%d%d%c%c", sender, messageType, destination, statusMessage, integrity);
-  
-  return messageSent;
+  mSLength = 5;
 }
 
-void requestEvent(char *message){
-  if(entryNumber == 1) {
-    if(message[1] - '0' == ACK) {
-      receiveMessageController(message, 4);
-    } else {
-      receiveMessageController(message, 5);
-    }
-  } else {
-    Wire.write(message);
-  }
+void requestEvent(){
+  Wire.write(messageSent, mSLength);
 }
 
 void receiveEvent() {
   int i = 0;
-  while (1 < Wire.available()) {
+  while (0 < Wire.available()) {
     messageReceive[i] = Wire.read();
     i++;
   }
+  
   receiveMessage(messageReceive);
 }
 
 //--------------------------------------| CONTROLLER |--------------------------------------------------------
 void controller() { 
-  if(digitalRead(controllerButtonPin) == HIGH) {
-    controllerOn = !controllerOn;
+  int changeController = false;
+  while(digitalRead(controllerButtonPin) == HIGH) {
+    if(!changeController) {
+      controllerOn = !controllerOn;
+    }
+    changeController = true;
     sentOff = false;
     entryOpen = 1;
-    delay(700);
   }
 
+  // Go Off if Errors Persist
   if (persistentErrors > 2) {
     controllerOn = false;
     sentOff = false;
@@ -419,24 +469,14 @@ void controller() {
   }
   
   if(controllerOn) { 
+    // -----------| READ PERIOD |------------
     int angleRead = analogRead(potentiometerPin);
     controller_period = map(angleRead, 0, 1023, 2000, 15000);
 
     long currentTime = millis();
 
     // --------------| PERIOD |--------------
-    if(currentTime >= controller_lastTimePeriod + controller_period) {
-      //See if Errors Exists
-      for(int i = 0; i < maxEntry; i++) {
-        if(entryErrors[i]) {
-          persistentErrors++;
-          break;
-        }
-        if(i == maxEntry - 1) {
-          persistentErrors = 0;
-        }
-      }
-
+    if(currentTime >= controller_lastTimePeriod + controller_period || changeController) {
       //See if Button Has Been Pressed
       if(reduceTime) {
         long remainingTime = (controller_lastTimePeriod + controller_period) - currentTime;
@@ -445,7 +485,7 @@ void controller() {
       }
 
       //Close Entrys
-      for(int i = 0; i < maxEntry; i++) {
+      for(int i = 0; i < MAX_ENTRY; i++) {
         if(i != entryOpen - 1) {
           sendMessage(generateMessageController(0, RED, i+1));
         }
@@ -454,7 +494,7 @@ void controller() {
       //Open Entry
       sendMessage(generateMessageController(0, GREEN, entryOpen));
     
-      if(entryOpen == 4) {
+      if(entryOpen == MAX_ENTRY) {
         entryOpen = 1;
       } else {
         entryOpen++;
@@ -464,21 +504,36 @@ void controller() {
     }
 
     // --------------| PINGS |--------------
-    if(currentTime >= controller_lastTimePing + controller_periodPing) {
-      
-      
-      for(int i = 0; i < maxEntry; i++) {
+    if(currentTime >= controller_lastTimePing + PING_PERIOD || changeController) {
+     
+      for(int i = 0; i < MAX_ENTRY; i++) {
           sendMessage(generateMessageController(0, PING, i+1));
       }
 
       controller_lastTimePing = millis();
     }
-    
-  } else {
+
+    // --------------| ERRORS |--------------
+    if(currentTime >= controller_lastTimeErrors + ERRORS_PERIOD || changeController) {
+     
+      //See if Errors Exists
+      for(int i = 1; i <= MAX_ENTRY; i++) {
+        if(entryErrors[i]) {
+          persistentErrors++;
+          break;
+        }
+        if(i == MAX_ENTRY) {
+          persistentErrors = 0;
+        }
+      }
+
+      controller_lastTimeErrors = millis();
+    }
+        
+  } else { // --------------| OFF |--------------
     digitalWrite(controllerLedPin, LOW);
-    // --------------| OFF |--------------
     if(!sentOff) {
-      for(int i = 0; i < maxEntry; i++) {
+      for(int i = 0; i < MAX_ENTRY; i++) {
         sendMessage(generateMessageController(0, OFF, i+1));
       }
       sentOff = true;
@@ -486,66 +541,76 @@ void controller() {
   }
 }
 
-char* generateMessageController(int sender, int messageType, int destination) {
-  char message[5] = "0000";
-  sprintf(message, "%d%d%d", sender, messageType, destination);
-  
-  char integrity = message[0] + message[1] + message[2];
-  
-  sprintf(messageController, "%d%d%d%c", sender, messageType, destination, integrity);
-  
-  return messageController;
+uint8_t* generateMessageController(uint8_t sender, uint8_t messageType, uint8_t destination) {
+  messageController[0] = sender;
+  messageController[1] = messageType;
+  messageController[2] = destination;
+  messageController[3] = sender + messageType + destination;
+
+  return  messageController;
 }
 
-void sendMessage(char* message) {
+void sendMessage(uint8_t* message) {
   blinkLedCommunication();
-  if(message[2] == '1') {
+  if(message[2] == 1) {
     receiveMessage(message);
   } else {
-    //sendWireMessage(message);
+    if(WIRE_MODE) {
+      sendWireMessage(message);
+    }
   }
   blinkLedCommunication();
 }
 
-void sendWireMessage(char* message){
-  int entry = message[2] -'0';
+void sendWireMessage(uint8_t* message){
+  int entry = message[2];
   int mLength = 0;
-  Wire.beginTransmission(entry);
-  Wire.write(message);
-  Wire.endTransmission();
-  if(message[1] - '0' == PING) {
-    Wire.requestFrom(entry, 6);
+  if(message[1] == PING) {
     mLength = 5;
   } else {
-    Wire.requestFrom(entry, 5);
-    mLength = 4;
+    mLength = 4; 
   }
+  Wire.beginTransmission(entry);
+  Wire.write(message, 4);
+  Wire.endTransmission();
+  
+  Wire.requestFrom(entry, mLength);
   int i = 0;
-  while (Wire.available()) {
+  
+  long startTime = millis();
+  long timeout = startTime + 200;
+  
+  while (0 < Wire.available() && millis() < timeout) {
     messageController[i] = Wire.read();
     i++;
+  }
+  
+  if(i < mLength) {
+    entryErrors[entry] = true;
   }
   
   receiveMessageController(messageController, mLength);
 }
 
-void receiveMessageController(char* message, int mLength) {
-  char testIntegrity = 0;
+void receiveMessageController(uint8_t* message, int mLength) {
+  uint8_t testIntegrity = 0;
 
   blinkLedCommunication();
   
   for(int i = 0; i < mLength-1; i++) {
     testIntegrity = testIntegrity + message[i];
   }
-  
+
+  int entry = message[0];
+     
   if(testIntegrity == message[mLength-1]) {
-    if(message[1] - '0' == ACK) {
+    if(message[1] == ACK) {
+      entryErrors[entry] = false;
       return;
-    } else if (message[1] - '0' == STATUS) {
-      char statusM = message[3];
-      char statusLeds = statusM & 0xFC;
-      char statusButton = statusM & 0x02;
-      int entry = message[0] - '0';
+    } else if (message[1] == STATUS) {
+      uint8_t statusM = message[3];
+      uint8_t statusLeds = statusM & 0xFC;
+      uint8_t statusButton = statusM & 0x02;
       
       if(statusLeds != 0) {
         entryErrors[entry] = true;
@@ -557,6 +622,8 @@ void receiveMessageController(char* message, int mLength) {
         reduceTime = true;
       }
     }
+  } else {
+     entryErrors[entry] = true;
   }
 
   blinkLedCommunication();
