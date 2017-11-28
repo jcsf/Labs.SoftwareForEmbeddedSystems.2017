@@ -22,3 +22,5 @@ All labs contain the Lab Guide, the Lab Report and the Arduino Code.
 * Lab 2: [Sensing the Real World](Lab02)
 
 * Lab 3: [Wired Communications Between Embedded Systems](Lab03)
+
+* Lab 4: [Project: Control of Traffic Lights at a Roundabout](Lab04)
