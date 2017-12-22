@@ -6,8 +6,6 @@ Group 6 ASE - Campus Alameda
 
 João Fernandes, 87786, jcsf_1995@hotmail.com
 
-Jorge Heleno, 79042, jorge.heleno@ist.utl.pt
-
 Repository:
 [Labs.SoftwareForEmbeddedSystems.2017](https://github.com/jcsf/Labs.SoftwareForEmbeddedSystems.2017)
 
